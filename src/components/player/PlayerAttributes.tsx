@@ -14,6 +14,11 @@ export function LesserBoonSelector({ boon, onChange }: { boon: string, onChange:
     </select>;
 }
 
+export type EquipmentEffect = {
+    flatBonusValue: number;
+    multiplierValue: number;
+}
+
 export function PlayerAttributesTable({ player, boon }: { player: Player, boon: string }) {
     const [openDropboxes, setOpenDropboxes] = useState<Record<string, boolean>>({})
 
@@ -22,12 +27,18 @@ export function PlayerAttributesTable({ player, boon }: { player: Player, boon: 
 
     const name = `${player.first_name} ${player.last_name}`;
     const items = [statsPlayer.equipment.head, statsPlayer.equipment.body, statsPlayer.equipment.hands, statsPlayer.equipment.feet, statsPlayer.equipment.accessory];
-    const itemTotals: Map<string, number> = new Map<string, number>();
+    const itemTotals: Map<string, EquipmentEffect> = new Map<string, EquipmentEffect>();
     items.forEach((item) => {
         if (item == null || item.rarity == 'Normal') return;
         item.effects.forEach((effect) => {
-            const amount = Math.round(effect.value * 100);
-            itemTotals.set(effect.attribute, amount + (itemTotals.get(effect.attribute) ?? 0));
+            if (effect.type == 'FlatBonus') {
+                const flatAmount = Math.round(effect.value * 100) + (itemTotals.get(effect.attribute)?.flatBonusValue ?? 0);
+                itemTotals.set(effect.attribute, { flatBonusValue: flatAmount, multiplierValue: (itemTotals.get(effect.attribute)?.multiplierValue ?? 0) });
+                return;
+            } else { // Multiplier
+                const multAmount = effect.value + (itemTotals.get(effect.attribute)?.multiplierValue ?? 0)
+                itemTotals.set(effect.attribute, { flatBonusValue: (itemTotals.get(effect.attribute)?.flatBonusValue ?? 0), multiplierValue: multAmount });
+            }
         })
     })
 
@@ -83,9 +94,12 @@ export function PlayerAttributesTable({ player, boon }: { player: Player, boon: 
                                         </>) : ''}
                                     </div>
                                 );
-                                const itemTotal = itemTotals.get(stat) ?? 0;
                                 const bottomBucket = stars !== null ? Math.max(0, stars * 25 - 12.5) : null;
                                 const topBucket = stars !== null ? Math.max(0, stars * 25 + 12.5) : null;
+
+                                const statTotal = talk ? talk.stars?.[stat].total * 100 : null;
+                                const itemTotal = calculateItemBonuses(itemTotals, stat, statTotal, boonMultiplier);
+
                                 return (
                                     <Fragment key={stat}>
                                         <div className={`${k % 2 == 1 ? 'bg-theme-primary' : 'bg-theme-secondary'} p-1 font-semibold relative`}>
@@ -135,11 +149,7 @@ export function PlayerAttributesTable({ player, boon }: { player: Player, boon: 
                                             </div>
                                         </div> */}
                                         <div className={`${k % 2 == 1 ? 'bg-theme-primary' : 'bg-theme-secondary'} p-1 text-center font-semibold`}>
-                                            {stars !== null ?
-                                                // `${trunc((stars * 25 + itemTotal + feedTotal) * boonMultiplier)}`
-                                                `${Math.round(stars * 25)}`
-                                                : `???`
-                                            }
+                                            {statTotal ? trunc(statTotal) : '???'}
                                         </div>
                                     </Fragment>
                                 );
@@ -199,6 +209,19 @@ function PlayerAttributesCondensed({ player, boon }: { player: PlayerWithSlot, b
         </div>
     );
 }
+
+function calculateItemBonuses(itemTotals: Map<string, EquipmentEffect>, stat: string, statTotal: number | null, boonMultiplier: number): number {
+    if (statTotal == null) return 0;
+    if (!itemTotals.has(stat)) return 0;
+    const effect = itemTotals.get(stat)!;
+    if (effect.multiplierValue == 0) return effect.flatBonusValue;
+    // get base before boon
+    const base = statTotal / boonMultiplier;
+    // calculate the bonus from the multiplier to flat number rather than %
+    const multBonus = (base - (base / (1 + effect.multiplierValue)))
+    return effect.flatBonusValue + multBonus;
+}
+
 
 export default function PlayerAttributes({ player, }: { player: PlayerWithSlot }) {
     const [boonOverride, setBoonOverride] = useState<string>();

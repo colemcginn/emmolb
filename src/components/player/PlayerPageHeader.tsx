@@ -41,7 +41,9 @@ export function EquipmentTooltip({ equipment, name, isActive, onToggle, appendNa
                                     <div key={`${equipment.rareName}-${effect.attribute}-${effect.value}`} className={itemFont[equipment.rarity]}>
                                         <span>
                                             <span className="font-semibold">
-                                                +{(100 * effect.value).toFixed(0)}
+                                                {effect.type === 'FlatBonus' ? '+' : ''}
+                                                {(100 * effect.value).toFixed(0)}
+                                                {effect.type === 'Multiplier' ? '%' : ''}
                                             </span>
                                             <span className="opacity-80">
                                                 {effect.attribute}
