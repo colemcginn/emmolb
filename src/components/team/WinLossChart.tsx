@@ -114,6 +114,10 @@ export function WinProgressionChart({ games, season }: WinProgressionChartProps)
     categoryPercentage: 1.0,
     barPercentage: 1.0,
     backgroundColor: '#000000',
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     plugins: {
       legend: {
         display: false,
@@ -199,7 +203,6 @@ export function WinProgressionChart({ games, season }: WinProgressionChartProps)
         beginAtZero: true,
       },
     },
-
   };
 
   return (
