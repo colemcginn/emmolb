@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Team, TeamPlayer } from "@/types/Team";
 import { DerivedPlayerStats } from "@/types/PlayerStats";
 import { ColumnDef } from "../player/PlayerStatsTables";
@@ -24,9 +24,24 @@ const BattingTableColumns: ColumnDef<PlayerName & DerivedPlayerStats>[] = [
         numerator: stats => stats.hits,
     },
     {
+        name: '2B',
+        description: 'Doubles',
+        numerator: stats => stats.doubles,
+    },
+    {
+        name: '3B',
+        description: 'Triples',
+        numerator: stats => stats.triples,
+    },
+    {
         name: 'HR',
         description: 'Home Runs',
         numerator: stats => stats.home_runs,
+    },
+    {
+        name: 'RBI',
+        description: 'Runs Batted In',
+        numerator: stats => stats.runs_batted_in,
     },
     {
         name: 'HBP',
@@ -81,6 +96,11 @@ const BattingTableColumns: ColumnDef<PlayerName & DerivedPlayerStats>[] = [
         description: 'On Base Plus Slugging',
         numerator: stats => stats.obp + stats.slg,
         format: value => value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }),
+    },
+    {
+        name: 'TB',
+        description: 'Total Bases',
+        numerator: stats => stats.total_bases,
     },
     {
         name: 'SB',
@@ -206,28 +226,63 @@ export type TeamStatsTableProps<T extends PlayerName> = {
 }
 
 function TeamStatsTable<T extends PlayerName>({ columns, stats }: TeamStatsTableProps<T>) {
-    const rows = useMemo(() => stats.map(playerStats => {
-        return {
-            name: playerStats.name, values: columns.map(col => {
-                const numerator = col.numerator(playerStats);
-                const divisor = (col.divisor && col.divisor(playerStats)) ?? 1;
-                const value = divisor !== 0 && numerator !== undefined ? numerator / divisor : undefined;
-                return value === undefined ? col.default ?? '—' : col.format ? col.format(value) : value.toLocaleString('en-US');
-            })
-        };
-    }), [columns, stats]);
+    const [sorting, setSorting] = useState({ field: 'default', ascending: false });
+
+    const rows = useMemo(() => {
+        const mappedRows = stats.map(playerStats => {
+            return {
+                name: playerStats.name, 
+                values: columns.map(col => {
+                    const numerator = col.numerator(playerStats);
+                    const divisor = (col.divisor && col.divisor(playerStats)) ?? 1;
+                    const value = divisor !== 0 && numerator !== undefined ? numerator / divisor : undefined;
+                    return value === undefined ? col.default ?? '—' : col.format ? col.format(value) : value.toLocaleString('en-US');
+                })
+            };
+        });
+
+        return mappedRows.sort((a, b) => {
+            if (sorting.field === 'default') {
+                return 0;
+            }
+            if (sorting.field === 'player') {
+                return sorting.ascending ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+            }
+            
+            const colIndex = parseInt(sorting.field);
+            // double parsing handles null values
+            const aVal = parseFloat(String(a.values[colIndex])) || -Infinity;
+            const bVal = parseFloat(String(b.values[colIndex])) || -Infinity;
+            
+            return sorting.ascending ? aVal - bVal : bVal - aVal;
+        });
+    }, [columns, stats, sorting]);
 
     return (
         <div className="max-w-full overflow-x-auto" style={{ scrollbarColor: 'var(--theme-primary) var(--theme-background)' }}>
             <table className="table">
                 <thead className="table-header-group">
                     <tr className="table-row">
-                        <th className="table-cell sticky left-0 text-xs font-semibold uppercase px-1.5 py-0.5 bg-(--theme-background)">
-                            Player
+                        <th 
+                            className="table-cell sticky left-0 text-xs font-semibold uppercase px-1.5 py-0.5 bg-(--theme-background) cursor-pointer hover:bg-(--theme-text)/10"
+                            onClick={() => setSorting(prev => ({ 
+                                field: 'player', 
+                                ascending: prev.field === 'player' ? !prev.ascending : true 
+                            }))}
+                        >
+                            Player {sorting.field === 'player' && (sorting.ascending ? '↑' : '↓')}
                         </th>
                         {columns.map((col, i) => (
-                            <th key={i} className="table-cell text-center text-xs px-1.5 py-0.5 font-semibold uppercase" title={col.description}>
-                                {col.name}
+                            <th 
+                                key={i} 
+                                className="table-cell text-center text-xs px-1.5 py-0.5 font-semibold uppercase cursor-pointer hover:bg-(--theme-text)/10" 
+                                title={col.description}
+                                onClick={() => setSorting(prev => ({ 
+                                    field: i.toString(), 
+                                    ascending: prev.field === i.toString() ? !prev.ascending : false 
+                                }))}
+                            >
+                                {col.name} {sorting.field === i.toString() && (sorting.ascending ? '↑' : '↓')}
                             </th>
                         ))}
                     </tr>
