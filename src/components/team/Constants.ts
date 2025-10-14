@@ -107,3 +107,5 @@ export const statDefinitions: Record<string, string> = {
     "Vision": "Batter's ability to track the pitch as it's coming at them",
     "Wisdom": "Batter's ability to learn from each pitch"
 }
+
+export const positionsList: string[] = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'SP', 'RP', 'CL'];

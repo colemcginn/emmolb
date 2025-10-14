@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { Team, TeamPlayer } from "@/types/Team";
 import { DerivedPlayerStats } from "@/types/PlayerStats";
 import { ColumnDef } from "../player/PlayerStatsTables";
+import { positionsList } from "./Constants";
 
-export type PlayerName = {
+export type PlayerNameAndPosition = {
     name: string;
+    position: string;
 }
 
-const BattingTableColumns: ColumnDef<PlayerName & DerivedPlayerStats>[] = [
+const BattingTableColumns: ColumnDef<PlayerNameAndPosition & DerivedPlayerStats>[] = [
     {
         name: 'PA',
         description: 'Plate Appearances',
@@ -121,7 +123,7 @@ const BattingTableColumns: ColumnDef<PlayerName & DerivedPlayerStats>[] = [
     },
 ];
 
-const PitchingTableColumns: ColumnDef<PlayerName & DerivedPlayerStats>[] = [
+const PitchingTableColumns: ColumnDef<PlayerNameAndPosition & DerivedPlayerStats>[] = [
     {
         name: 'GP',
         description: 'Games Played',
@@ -220,18 +222,20 @@ const PitchingTableColumns: ColumnDef<PlayerName & DerivedPlayerStats>[] = [
     },
 ];
 
-export type TeamStatsTableProps<T extends PlayerName> = {
+export type TeamStatsTableProps<T extends PlayerNameAndPosition> = {
     columns: ColumnDef<T>[];
     stats: T[];
 }
 
-function TeamStatsTable<T extends PlayerName>({ columns, stats }: TeamStatsTableProps<T>) {
+
+function TeamStatsTable<T extends PlayerNameAndPosition>({ columns, stats }: TeamStatsTableProps<T>) {
     const [sorting, setSorting] = useState({ field: 'default', ascending: false });
 
     const rows = useMemo(() => {
         const mappedRows = stats.map(playerStats => {
             return {
-                name: playerStats.name, 
+                name: playerStats.name,
+                position: playerStats.position,
                 values: columns.map(col => {
                     const numerator = col.numerator(playerStats);
                     const divisor = (col.divisor && col.divisor(playerStats)) ?? 1;
@@ -248,12 +252,17 @@ function TeamStatsTable<T extends PlayerName>({ columns, stats }: TeamStatsTable
             if (sorting.field === 'player') {
                 return sorting.ascending ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
             }
-            
+            if (sorting.field === 'position') {
+                const aIndex = positionsList.indexOf(a.position);
+                const bIndex = positionsList.indexOf(b.position);
+                return sorting.ascending ? aIndex - bIndex : bIndex - aIndex;
+            }
+
             const colIndex = parseInt(sorting.field);
             // double parsing handles null values
             const aVal = parseFloat(String(a.values[colIndex])) || -Infinity;
             const bVal = parseFloat(String(b.values[colIndex])) || -Infinity;
-            
+
             return sorting.ascending ? aVal - bVal : bVal - aVal;
         });
     }, [columns, stats, sorting]);
@@ -263,23 +272,32 @@ function TeamStatsTable<T extends PlayerName>({ columns, stats }: TeamStatsTable
             <table className="table">
                 <thead className="table-header-group">
                     <tr className="table-row">
-                        <th 
+                        <th
                             className="table-cell sticky left-0 text-xs font-semibold uppercase px-1.5 py-0.5 bg-(--theme-background) cursor-pointer hover:bg-(--theme-text)/10"
-                            onClick={() => setSorting(prev => ({ 
-                                field: 'player', 
-                                ascending: prev.field === 'player' ? !prev.ascending : true 
+                            onClick={() => setSorting(prev => ({
+                                field: 'player',
+                                ascending: prev.field === 'player' ? !prev.ascending : true
                             }))}
                         >
                             Player {sorting.field === 'player' && (sorting.ascending ? '↑' : '↓')}
                         </th>
+                        <th
+                            className="table-cell sticky left-0 text-xs font-semibold uppercase px-1.5 py-0.5 bg-(--theme-background) cursor-pointer hover:bg-(--theme-text)/10"
+                                onClick={() => setSorting(prev => ({
+                                    field: 'position',
+                                    ascending: prev.field === 'position' ? !prev.ascending : true
+                                }))}
+                        >
+                            Pos {sorting.field === 'position' && (sorting.ascending ? '↑' : '↓')}
+                        </th>
                         {columns.map((col, i) => (
-                            <th 
-                                key={i} 
-                                className="table-cell text-center text-xs px-1.5 py-0.5 font-semibold uppercase cursor-pointer hover:bg-(--theme-text)/10" 
+                            <th
+                                key={i}
+                                className="table-cell text-center text-xs px-1.5 py-0.5 font-semibold uppercase cursor-pointer hover:bg-(--theme-text)/10"
                                 title={col.description}
-                                onClick={() => setSorting(prev => ({ 
-                                    field: i.toString(), 
-                                    ascending: prev.field === i.toString() ? !prev.ascending : false 
+                                onClick={() => setSorting(prev => ({
+                                    field: i.toString(),
+                                    ascending: prev.field === i.toString() ? !prev.ascending : false
                                 }))}
                             >
                                 {col.name} {sorting.field === i.toString() && (sorting.ascending ? '↑' : '↓')}
@@ -292,6 +310,9 @@ function TeamStatsTable<T extends PlayerName>({ columns, stats }: TeamStatsTable
                         <tr key={i} className="table-row border-t-1 first:border-(--theme-text) border-(--theme-text)/50 even:bg-(--theme-secondary) odd:bg-(--theme-primary)">
                             <td className={`table-cell sticky left-0 text-sm text-left px-1.5 py-0.5 ${i % 2 === 1 ? 'bg-(--theme-secondary)' : 'bg-(--theme-primary)'}`}>
                                 {row.name}
+                            </td>
+                            <td className={`table-cell sticky left-0 text-sm text-left px-1.5 py-0.5 ${i % 2 === 1 ? 'bg-(--theme-secondary)' : 'bg-(--theme-primary)'}`}>
+                                {row.position}
                             </td>
                             {row.values.map((value, j) => (
                                 <td key={j} className="table-cell text-sm text-right px-1.5 py-0.5 tabular-nums border-l-1 border-(--theme-text)/25 border-dotted">
@@ -315,14 +336,16 @@ export default function TeamStatsTables({ team }: TeamStatsTablesProps) {
     const batterStats = useMemo(() =>
         team.players.filter(player => player.stats.plate_appearances > 0).map((player: TeamPlayer) => ({
             ...player.stats,
+            position: player.position,
             name: player.first_name + ' ' + player.last_name,
-        } as PlayerName & DerivedPlayerStats)), [team]);
+        } as PlayerNameAndPosition & DerivedPlayerStats)), [team]);
 
     const pitcherStats = useMemo(() =>
         team.players.filter(player => player.stats.appearances > 0).map((player: TeamPlayer) => ({
             ...player.stats,
+            position: player.position,
             name: player.first_name + ' ' + player.last_name,
-        } as PlayerName & DerivedPlayerStats)), [team]);
+        } as PlayerNameAndPosition & DerivedPlayerStats)), [team]);
 
     return (
         <div className="flex flex-col gap-8 max-w-full">
