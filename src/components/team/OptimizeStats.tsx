@@ -826,7 +826,18 @@ export default function OptimizeTeamPage({ id }: { id: string }) {
             const playersRes = await fetch(`/nextapi/players?ids=${team.players.map((p: TeamPlayer) => p.player_id).join(',')}`);
             if (!playersRes.ok) throw new Error('Failed to load player data');
             const players = await playersRes.json();
-            setPlayers(players.players.map((p: any) => MapAPIPlayerResponse(p)).sort((a: Player, b: Player) => {
+
+            // Create a map of player_id to slot from team.players to handle bad DH position
+            const playerSlotMap = new Map(team.players.map((p: TeamPlayer) => [p.player_id, p.slot]));
+            setPlayers(players.players.map((p: any) => {
+                const mappedPlayer = MapAPIPlayerResponse(p);
+                const slot = playerSlotMap.get(mappedPlayer.id);
+                // We mainly want to do this for DH
+                if (slot && p.PositionType == "Batter") {
+                    mappedPlayer.position = slot;
+                }
+                return mappedPlayer;
+            }).sort((a: Player, b: Player) => {
                 return positionsList.indexOf(a.position) - positionsList.indexOf(b.position);
             }));
         } catch (err) {
