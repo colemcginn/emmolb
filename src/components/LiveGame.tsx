@@ -23,6 +23,8 @@ import { useGameHeader } from '@/hooks/api/Game';
 import { useTeam } from '@/hooks/api/Team';
 import Loading from './Loading';
 import { usePlayers } from '@/hooks/api/Player';
+import { Checkbox } from './team/Checkbox';
+import { usePersistedState } from '@/hooks/PersistedState';
 
 const greaterLeagueIds = ['6805db0cac48194de3cd3fe4', '6805db0cac48194de3cd3fe5',];
 
@@ -134,7 +136,7 @@ export function LiveGamePageContent({ gameId, game, awayTeam, homeTeam }: LiveGa
     const [playerType, setPlayerType] = useState<'pitching' | 'batting' | null>(null);
     const [showStats, setShowStats] = useState(false);
     const [followLive, setFollowLive] = useState(false);
-    const [showBoxScore, setShowBoxScore] = useState(isComplete);
+    const [showBoxScore, setShowBoxScore] = usePersistedState('liveGame_showBoxScore', isComplete);
     const [reverseEvents, setReverseEvents] = useState<boolean>(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -302,47 +304,25 @@ export function LiveGamePageContent({ gameId, game, awayTeam, homeTeam }: LiveGa
                         </button>
                         <div className={`absolute bg-theme-primary border border-theme-accent rounded p-2 mt-1 z-50 shadow-lg transition-all duration-200 ease-out transform origin-top ${isDropdownOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
                             {!isHomerunChallenge && 
-                                <div className="flex items-center space-x-2">
-                                    <input type="checkbox" checked={showBoxScore} onChange={() => setShowBoxScore(!showBoxScore)} className="mr-1 accent-theme-accent" />
-                                    <label className="whitespace-nowrap">Show Box Score</label>
-                                </div>
+                                <Checkbox checked={showBoxScore} label="Show Box Score" onChange={setShowBoxScore} />
                             }
-                            <div className="flex items-center space-x-2">
-                                <input type="checkbox" checked={showStats} onChange={() => setShowStats(!showStats)} className="mr-1 accent-theme-accent" />
-                                <label className="whitespace-nowrap">Show Stats</label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <input type="checkbox" checked={showDetailedStats} onChange={() => setShowDetailedStats(!showDetailedStats)} className="mr-1 accent-theme-accent" />
-                                <label className="whitespace-nowrap">Show Detailed Stats</label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <input type="checkbox" checked={followLive} onChange={() => setFollowLive(!followLive)} className="mr-1 accent-theme-accent" />
-                                <label className="whitespace-nowrap">Stats Follow Live</label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <input type="checkbox" checked={reverseEvents} onChange={() => setReverseEvents(!reverseEvents)} className="mr-1 accent-theme-accent" />
-                                <label className="whitespace-nowrap">Reverse Events</label>
-                            </div>
+                            <Checkbox checked={showStats} label="Show Stats" onChange={setShowStats} />
+                            <Checkbox checked={showDetailedStats} label="Show Detailed Stats" onChange={setShowDetailedStats} />
+                            <Checkbox checked={followLive} label="Stats Follow Live" onChange={setFollowLive} />
+                            <Checkbox checked={reverseEvents} label="Reverse Events" onChange={setReverseEvents} />
                         </div>
                     </div>
-                    <div className="md:flex justify-between items-center mb-2 gap-2 mt-4 hidden md:visible">
-                        {!isHomerunChallenge &&
-                            <button onClick={() => setShowBoxScore(!showBoxScore)} className="px-3 py-1 text-xs bg-theme-primary hover:opacity-80 rounded-md">
-                                {showBoxScore ? 'Hide Box Score' : 'Show Box Score'}
-                            </button>
-                        }
-                        <button onClick={() => setShowStats(!showStats)} className="px-3 py-1 text-xs bg-theme-primary hover:opacity-80 rounded-md">
-                            {showStats ? 'Hide Stats' : 'Show Stats'}
-                        </button>
-                        <button onClick={() => setShowDetailedStats(!showDetailedStats)} className="px-3 py-1 text-xs bg-theme-primary hover:opacity-80 rounded-md">
-                            {showDetailedStats ? 'Hide Detailed Stats' : 'Show Detailed Stats'}
-                        </button>
-                        <button onClick={() => setFollowLive(prev => !prev)} className="px-3 py-1 text-xs bg-theme-primary hover:opacity-80 rounded-md">
-                            {followLive ? 'Unfollow Live' : 'Follow Live'}
-                        </button>
-                        <button onClick={() => setReverseEvents(!reverseEvents)} className="px-3 py-1 mb-0 text-xs bg-theme-primary hover:opacity-80 rounded-md">
-                            Reverse Events
-                        </button>
+                    <div className="md:flex flex-col gap-2 mt-4 hidden md:visible">
+                        <div className="flex justify-center items-center gap-2">
+
+                            {!isHomerunChallenge &&
+                                <Checkbox checked={showBoxScore} label="Show Box Score" onChange={setShowBoxScore} />
+                            }
+                            <Checkbox checked={showStats} label="Show Stats" onChange={setShowStats} />
+                            <Checkbox checked={showDetailedStats} label="Show Detailed Stats" onChange={setShowDetailedStats} />
+                            <Checkbox checked={followLive} label="Follow Live" onChange={setFollowLive} />
+                            <Checkbox checked={reverseEvents} label="Reverse Events" onChange={setReverseEvents} />
+                        </div>
                     </div>
 
                     {showBoxScore &&
