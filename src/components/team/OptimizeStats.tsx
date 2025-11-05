@@ -403,11 +403,101 @@ export function calculateBestPositionForPlayers(players: Player[], ignoreItems: 
     return playerBestPositions;
 }
 
+// Helper function to generate step-by-step swap instructions
+function generateSwapInstructions(
+    currentLineup: Player[],
+    optimalLineup: Array<{ player: Player; position: string; score: number }>
+): Array<{ step: number; player1Name: string; player1Position: string; player2Name: string; player2Position: string }> {
+    const instructions: Array<{ step: number; player1Name: string; player1Position: string; player2Name: string; player2Position: string }> = [];
+    
+    // Create maps of current and optimal assignments
+    const currentPosToPlayer = new Map<string, string>(); // position -> playerName
+    const currentPlayerToPos = new Map<string, string>(); // playerName -> position
+    currentLineup.forEach(player => {
+        const playerName = `${player.first_name} ${player.last_name}`;
+        currentPosToPlayer.set(player.position, playerName);
+        currentPlayerToPos.set(playerName, player.position);
+    });
+    
+    const optimalPosToPlayer = new Map<string, string>(); // position -> playerName
+    const optimalPlayerToPos = new Map<string, string>(); // playerName -> position
+    optimalLineup.forEach(assignment => {
+        const playerName = `${assignment.player.first_name} ${assignment.player.last_name}`;
+        optimalPosToPlayer.set(assignment.position, playerName);
+        optimalPlayerToPos.set(playerName, assignment.position);
+    });
+    
+    // Track which players have been placed correctly
+    const processedPlayers = new Set<string>();
+    let stepNumber = 1;
+    
+    // Find cycles and generate swaps
+    for (const [playerName, optimalPos] of optimalPlayerToPos.entries()) {
+        if (processedPlayers.has(playerName)) continue;
+        
+        const currentPos = currentPlayerToPos.get(playerName);
+        if (!currentPos || currentPos === optimalPos) {
+            processedPlayers.add(playerName);
+            continue;
+        }
+        
+        // Follow the cycle: playerName needs to go to optimalPos
+        const chain: Array<{ name: string; currentPos: string; targetPos: string }> = [];
+        let current = playerName;
+        let currentPosition = currentPos;
+        
+        while (!processedPlayers.has(current)) {
+            const targetPos = optimalPlayerToPos.get(current)!;
+            chain.push({ name: current, currentPos: currentPosition, targetPos });
+            processedPlayers.add(current);
+            
+            // Who is currently at the target position?
+            const nextPlayer = currentPosToPlayer.get(targetPos);
+            if (!nextPlayer || nextPlayer === current) break;
+            
+            current = nextPlayer;
+            currentPosition = targetPos;
+            
+            // If we've looped back to someone already processed, break
+            if (processedPlayers.has(current)) break;
+        }
+        
+        // Generate swap instructions for this chain
+        // For a chain [A@X->Y, B@Y->Z, C@Z->X], we need swaps: A<->B, then B<->C
+        for (let i = 0; i < chain.length - 1; i++) {
+            const player1 = chain[i];
+            const player2 = chain[i + 1];
+            
+            // Get both players' current positions at this step (after previous swaps)
+            const player1CurrentPos = currentPlayerToPos.get(player1.name) || player1.currentPos;
+            const player2CurrentPos = currentPlayerToPos.get(player2.name) || player2.currentPos;
+            
+            instructions.push({
+                step: stepNumber++,
+                player1Name: player1.name,
+                player1Position: player1CurrentPos,
+                player2Name: player2.name,
+                player2Position: player2CurrentPos
+            });
+            
+            // Update current positions after swap
+            // Player1 goes to their target, Player2 goes to where Player1 was
+            currentPosToPlayer.set(player1.targetPos, player1.name);
+            currentPosToPlayer.set(player1CurrentPos, player2.name);
+            currentPlayerToPos.set(player1.name, player1.targetPos);
+            currentPlayerToPos.set(player2.name, player1CurrentPos);
+        }
+    }
+    
+    return instructions;
+}
+
 // Calculate optimal defensive lineup with one player per position
 export function calculateOptimalDefensiveLineup(players: Player[], ignoreItems: boolean = false): {
     lineup: Array<{ player: Player; position: string; score: number }>;
     totalScore: number;
     unassignedPlayers: Player[];
+    swapInstructions: Array<{ step: number; player1Name: string; player1Position: string; player2Name: string; player2Position: string }>;
 } {
     const defensivePositions = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
 
@@ -504,7 +594,10 @@ export function calculateOptimalDefensiveLineup(players: Player[], ignoreItems: 
         return !assignedPlayerKeys.has(playerKey);
     });
 
-    return { lineup, totalScore, unassignedPlayers };
+    // Generate swap instructions
+    const swapInstructions = generateSwapInstructions(players, lineup);
+
+    return { lineup, totalScore, unassignedPlayers, swapInstructions };
 }
 
 
@@ -1204,6 +1297,48 @@ export default function OptimizeTeamPage({ id }: { id: string }) {
                                             </div>
                                         ))}
                                 </div>
+
+                                {/* Swap Instructions */}
+                                {optimalDefensiveLineup.swapInstructions.length > 0 && (
+                                    <div className="mt-4 pt-3 border-t border-green-500/30">
+                                        <h4 className="text-sm font-semibold mb-2 text-green-400">
+                                            🔄 Step-by-Step Player Swaps ({optimalDefensiveLineup.swapInstructions.length} swap{optimalDefensiveLineup.swapInstructions.length !== 1 ? 's' : ''} needed)
+                                        </h4>
+                                        <p className="text-xs opacity-70 mb-3">
+                                            Follow these steps in order to transition from your current lineup to the optimal lineup. Each step swaps two players' positions:
+                                        </p>
+                                        <div className="space-y-2">
+                                            {optimalDefensiveLineup.swapInstructions.map((instruction) => (
+                                                <div
+                                                    key={instruction.step}
+                                                    className="bg-theme-primary/70 rounded px-3 py-2 flex items-center gap-3"
+                                                >
+                                                    <span className="font-bold text-yellow-400 text-sm min-w-[24px]">
+                                                        {instruction.step}.
+                                                    </span>
+                                                    <div className="flex items-center gap-2 flex-wrap text-xs">
+                                                        <span className="text-white">Swap</span>
+                                                        <span className="font-semibold text-blue-300 px-2 py-0.5 bg-blue-500/20 rounded">
+                                                            {instruction.player1Name}
+                                                        </span>
+                                                        <span className="text-gray-400">{instruction.step > 1 ? 'now at' : 'at'}</span>
+                                                        <span className="font-bold text-red-400 px-2 py-0.5 bg-red-500/20 rounded">
+                                                            {instruction.player1Position}
+                                                        </span>
+                                                        <span className="text-white">↔</span>
+                                                        <span className="font-semibold text-blue-300 px-2 py-0.5 bg-blue-500/20 rounded">
+                                                            {instruction.player2Name}
+                                                        </span>
+                                                        <span className="text-gray-400">at</span>
+                                                        <span className="font-bold text-green-400 px-2 py-0.5 bg-green-500/20 rounded">
+                                                            {instruction.player2Position}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* All Players Table */}
