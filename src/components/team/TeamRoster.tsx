@@ -5,6 +5,8 @@ import { Team } from "@/types/Team";
 import { DerivedPlayerStats } from "@/types/PlayerStats";
 import { usePlayers } from "@/hooks/api/Player";
 import Link from "next/link";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { formatBoonDescription } from "./BoonDictionary";
 
 const statKeyMap: Record<string, string> = {
     "AVG": "ba",
@@ -96,6 +98,72 @@ export function TeamRoster({ team }: TeamRosterProps) {
         return reverse ? aValue - bValue : bValue - aValue;
     }) : [];
 
+
+    const sortedBench = team.players ? [...(team.bench?.batters || []),
+    ...(team.bench?.pitchers || [])].sort((a, b) => {
+        if (!sortStat || !players) return 0;
+
+        const statKey = statKeyMap[sortStat] as keyof DerivedPlayerStats;
+        const aStats = a.stats[statKey];
+        const bStats = b.stats[statKey];
+
+        const aValue = typeof aStats === 'number' ? aStats : Infinity;
+        const bValue = typeof bStats === 'number' ? bStats : Infinity;
+
+        const reverse = reverseSortStats.has(statKey);
+
+        if (!Number.isFinite(aValue) && !Number.isFinite(bValue)) return 0;
+        if (!Number.isFinite(aValue)) return 1;
+        if (!Number.isFinite(bValue)) return -1;
+
+        return reverse ? aValue - bValue : bValue - aValue;
+    }) : [];
+
+    const renderPlayerRow = (player: any, i: number) => {
+        const statKey = statKeyMap[sortStat] as keyof DerivedPlayerStats;
+        const rawStat = statKey && player ? player.stats[statKey] : null;
+        const formattedStat = typeof rawStat === 'number' ? !Number.isFinite(rawStat) ? '-' : ['ba', 'obp', 'slg', 'ops', 'era', 'whip', 'kbb', 'k9', 'bb9', 'h9', 'hr9'].includes(statKey!) ? rawStat.toFixed(3) : Math.round(rawStat).toString() : '';
+        const isCorrupted = players?.find(x => x.id === player.player_id)?.modifications?.some(x => x.name === 'Corrupted');
+        
+        return (
+            <div key={i}>
+                <Link href={`/player/${player.player_id}`}>
+                    <div className={`flex justify-between items-center p-1 rounded link-hover cursor-pointer transition ${isCorrupted && 'border-2 border-red-600/20'}`}>
+                        <div className="flex items-center gap-3 w-full">
+                            <span className="w-4 text-xl text-center">{player.emoji}</span>
+                            <span className="w-8 text-sm text-right">#{player.number}</span>
+                            <span className="w-6 text-sm font-bold text-theme-text opacity-80 text-right">{player.slot}</span>
+                            <span className="flex-1 font-semibold text-left overflow-hidden text-ellipsis whitespace-nowrap">{player.first_name} {player.last_name}</span>
+                            {sortStat ? (
+                                <span className="ml-auto w-20 text-right text-sm opacity-70 text-theme-text font-mono">
+                                    {formattedStat}
+                                </span>
+                            ) : (
+                                <span className="ml-auto w-20 text-right text-base text-theme-text font-mono flex gap-1 justify-end">
+                                    {isCorrupted && (
+                                        <Tooltip content="Corrupted" position="top">
+                                            <span>🫀</span>
+                                        </Tooltip>
+                                    )}
+                                    {player.greater_boon?.emoji && (
+                                        <Tooltip content={player.greater_boon.description} position="top">
+                                            <span>{player.greater_boon.emoji}</span>
+                                        </Tooltip>
+                                    )}
+                                    {player.lesser_boon?.emoji && (
+                                        <Tooltip content={formatBoonDescription(player.lesser_boon)} position="top">
+                                            <span>{player.lesser_boon.emoji}</span>
+                                        </Tooltip>
+                                    )}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </Link>
+            </div>
+        );
+    };
+
     return (
         <>
             <div className="mb-4 text-center">
@@ -159,36 +227,9 @@ export function TeamRoster({ team }: TeamRosterProps) {
             </div>
             <div className="flex justify-center w-full mb-4">
                 <div className="w-128 space-y-2">
-                    {sortedPlayers.map((player, i) => {
-                        const statKey = statKeyMap[sortStat] as keyof DerivedPlayerStats;
-                        const rawStat = statKey && player ? player.stats[statKey] : null;
-                        const formattedStat = typeof rawStat === 'number' ? !Number.isFinite(rawStat) ? '-' : ['ba', 'obp', 'slg', 'ops', 'era', 'whip', 'kbb', 'k9', 'bb9', 'h9', 'hr9'].includes(statKey!) ? rawStat.toFixed(3) : Math.round(rawStat).toString() : '';
-                        const isCorrupted = players?.find(x => x.id === player.player_id)?.modifications?.some(x => x.name === 'Corrupted');
-                        return (
-                            <div key={i}>
-                                <Link href={`/player/${player.player_id}`}>
-                                    <div className={`flex justify-between items-center p-1 rounded link-hover cursor-pointer transition ${isCorrupted && 'border-2 border-red-600/20'}`}>
-                                        <div className="flex items-center gap-3 w-full">
-                                            <span className="w-4 text-xl text-center">{player.emoji}</span>
-                                            <span className="w-8 text-sm text-right">#{player.number}</span>
-                                            <span className="w-6 text-sm font-bold text-theme-text opacity-80 text-right">{player.slot}</span>
-                                            <span className="flex-1 font-semibold text-left overflow-hidden text-ellipsis whitespace-nowrap">{player.first_name} {player.last_name}</span>
-                                            {sortStat && (
-                                                <span className="ml-auto w-20 text-right text-sm opacity-70 text-theme-text font-mono">
-                                                    {formattedStat}
-                                                </span>
-                                            )}
-                                            {!sortStat && isCorrupted && (
-                                                <span className="ml-auto w-20 text-right text-base text-theme-text font-mono">
-                                                    🫀
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </Link>
-                            </div>
-                        );
-                    })}
+                    {sortedPlayers.map(renderPlayerRow)}
+                    <h2 className="text-xl font-bold my-4 text-center">Bench</h2>
+                    {sortedBench.map(renderPlayerRow)}
                 </div>
             </div>
         </>

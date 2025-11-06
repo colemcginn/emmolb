@@ -1,3 +1,5 @@
+import { Boon } from "@/types/Player";
+
 // All lesser boon values are currently type "add-mult"
 export const lesserBoonTable: Record<string, Record<string, number>> = {
     "ROBO": {
@@ -279,7 +281,7 @@ export const greaterBoonTable: Record<string, GreaterBoon> = {
         categories: { 'Batting': 0.1 },
         isConditional: true,
     },
-    'Strong Starter': { 
+    'Strong Starter': {
         categories: { 'Pitching': 0.1 },
         isConditional: true,
     },
@@ -406,4 +408,12 @@ export const lesserBoonEmojiMap: Record<string, string> = {
 
 export function getLesserBoonEmoji(boonName: string): string {
     return lesserBoonEmojiMap[boonName] || "";
+}
+
+
+export function formatBoonDescription(boon: Boon): string {
+    if(!boon) return '';
+    // split the description into 3 lines for easier reading in a tooltip
+    const description = boon.description.replace('.', '.\n').replace('-', '\n-');
+    return `${boon.emoji}${boon.name}\n${description}`;
 }

@@ -255,7 +255,7 @@ function mapEquipment(raw: any): Equipment | undefined {
     };
 }
 
-function mapBoon(raw: any): Boon | undefined {
+export function mapBoon(raw: any): Boon | undefined {
     if (!raw) return;
 
     return {
