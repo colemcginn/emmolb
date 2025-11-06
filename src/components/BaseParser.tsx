@@ -31,7 +31,7 @@ export interface Baserunner {
     pitcher?: string;
 }
 
-export function ProcessMessage(event: Event, players: string[], queue: Baserunner[], gameStats?: GameStats,): {bases: Bases; baseQueue: Baserunner[]} {
+export function ProcessMessage(event: Event, players: string[], queue: Baserunner[], gameStats?: GameStats,): { bases: Bases; baseQueue: Baserunner[] } {
     const message = event.message;
     const runners = queue.map(x => x.runner);
     const newQueue = [...queue];
@@ -40,6 +40,9 @@ export function ProcessMessage(event: Event, players: string[], queue: Baserunne
 
     const startsInning = /starts the inning on/i.test(message);
     const hit = /(singles on|doubles on|triples on)/i.test(message);
+    const single = /singles on/i.test(message);
+    const double = /doubles on/i.test(message);
+    const triple = /triples on/i.test(message);
     const homer = /(homers on|grand slam)/i.test(message);
     const walk = /^Ball 4. /i.test(message);
     const hbp = /hit by the pitch/i.test(message);
@@ -59,8 +62,8 @@ export function ProcessMessage(event: Event, players: string[], queue: Baserunne
     const pitcherEjected = pitcher && message.match(`ROBO-UMP ejected.*${pitcher}`) !== null;
     const batterEjected = batter && message.match(`ROBO-UMP ejected.*${batter}.*for.*Bench Player`) !== null;
 
-    const {scoreboard, batterStats, pitcherStats} = (() => {
-        if (!gameStats) return {scoreboard: null, batterStats: null, pitcherStats: null};
+    const { scoreboard, batterStats, pitcherStats } = (() => {
+        if (!gameStats) return { scoreboard: null, batterStats: null, pitcherStats: null };
 
         const scoreboard = (event.inning_side === 0) ? gameStats.away : gameStats.home;
         if (scoreboard.runsByInning.length < event.inning)
@@ -86,16 +89,23 @@ export function ProcessMessage(event: Event, players: string[], queue: Baserunne
             const scoringPlayer = newQueue[i];
             if (scoringPlayer && scoringPlayer.runner && scoringPlayer.runner != 'Unknown') {
                 gameStats.batters[scoringPlayer.runner].runs++;
-                if (scoringPlayer.pitcher) gameStats.pitchers[scoringPlayer.pitcher].earnedRuns++;
+                if (scoringPlayer.pitcher) {
+                    gameStats.pitchers[scoringPlayer.pitcher].earnedRuns++;
+                    gameStats.pitchers[scoringPlayer.pitcher].runs++;
+                } else if(pitcher){
+                    // sometimes scoringPlayer.pitcher is null, its safe to assume current pitcher gave up that run rather than not counting it at all
+                    gameStats.pitchers[pitcher].earnedRuns++;
+                    gameStats.pitchers[pitcher].runs++;
+                }
             }
         }
         if (scoreCount > 0) {
             scoreboard.runsByInning[event.inning - 1] += scoreCount;
         }
 
-        return {scoreboard, batterStats, pitcherStats};
+        return { scoreboard, batterStats, pitcherStats };
     })();
-    
+
     if (gameStats) {
         if (hit || homer) {
             scoreboard!.hits++;
@@ -109,8 +119,15 @@ export function ProcessMessage(event: Event, players: string[], queue: Baserunne
             if (homer) {
                 batterStats.homeRuns++;
                 batterStats.runs++;
+                batterStats.totalBases += 4;
             }
+            if (single) batterStats.totalBases += 1;
+            if (double) batterStats.totalBases += 2;
+            if (triple) batterStats.totalBases += 3;
             if (scoreCount > 0 && !error && !doublePlay && !stealsHome && !balk) batterStats.rbi += scoreCount;
+            if (strikeout) batterStats.strikeouts++;
+            if (walk || hbp) batterStats.walks++;
+            if (doublePlay && batter && message.includes(`${batter} grounds into`)) batterStats.groundedIntoDoublePlay++;
             if (batterEjected) batterStats.ejected = true;
         }
 
@@ -118,7 +135,11 @@ export function ProcessMessage(event: Event, players: string[], queue: Baserunne
             if (strike) pitcherStats.strikesThrown++;
             if (strike || ball) pitcherStats.pitchCount++;
             if (hit || homer) pitcherStats.hits++;
-            if (homer) pitcherStats.earnedRuns++;
+            if (homer) {
+                pitcherStats.homeRuns++;
+                pitcherStats.earnedRuns += 1;
+                pitcherStats.runs += 1; 
+            }
             if (out || strikeout || fc || sacFly) pitcherStats.outsRecorded++;
             if (caughtStealing) pitcherStats.outsRecorded++;
             if (doublePlay) pitcherStats.outsRecorded += 2;
@@ -138,7 +159,24 @@ export function ProcessMessage(event: Event, players: string[], queue: Baserunne
     }
 
     if (hit || walk || hbp || error || fc)
-        newQueue.push({runner: batter ?? 'Unknown', pitcher: !error ? pitcher : undefined});
+        newQueue.push({ runner: batter ?? 'Unknown', pitcher: !error ? pitcher : undefined });
+
+    // Track stolen bases and caught stealing
+    if (gameStats) {
+        const successfulSteals = extractPlayers(message, runners, 'steals');
+        for (const player of successfulSteals) {
+            if (gameStats.batters[player]) {
+                gameStats.batters[player].stolenBases++;
+            }
+        }
+
+        const caughtStealingPlayers = extractPlayers(message, runners, 'is caught stealing');
+        for (const player of caughtStealingPlayers) {
+            if (gameStats.batters[player]) {
+                gameStats.batters[player].caughtStealing++;
+            }
+        }
+    }
 
     let outs = extractPlayers(message, runners, 'out at');
     outs = outs.concat(extractPlayers(message, runners, 'is caught stealing'));
@@ -150,6 +188,12 @@ export function ProcessMessage(event: Event, players: string[], queue: Baserunne
 
     if (inningEnd && gameStats) {
         scoreboard!.leftOnBase += newQueue.length;
+        // Track individual LOB for each player left on base
+        for (const baserunner of newQueue) {
+            if (baserunner.runner && baserunner.runner !== 'Unknown' && gameStats.batters[baserunner.runner]) {
+                gameStats.batters[baserunner.runner].leftOnBase++;
+            }
+        }
     }
 
     if (homer || inningEnd)

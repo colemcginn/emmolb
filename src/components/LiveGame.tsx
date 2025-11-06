@@ -137,6 +137,7 @@ export function LiveGamePageContent({ gameId, game, awayTeam, homeTeam }: LiveGa
     const [showStats, setShowStats] = useState(false);
     const [followLive, setFollowLive] = useState(false);
     const [showBoxScore, setShowBoxScore] = usePersistedState('liveGame_showBoxScore', isComplete);
+    const [showExtendedBoxScore, setShowExtendedBoxScore] = usePersistedState('liveGame_showExtendedBoxScore', false);
     const [reverseEvents, setReverseEvents] = useState<boolean>(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -306,6 +307,9 @@ export function LiveGamePageContent({ gameId, game, awayTeam, homeTeam }: LiveGa
                             {!isHomerunChallenge && 
                                 <Checkbox checked={showBoxScore} label="Show Box Score" onChange={setShowBoxScore} />
                             }
+                            {!isHomerunChallenge && showBoxScore &&
+                                <Checkbox checked={showExtendedBoxScore} label="Extended Box Score" onChange={setShowExtendedBoxScore} />
+                            }
                             <Checkbox checked={showStats} label="Show Stats" onChange={setShowStats} />
                             <Checkbox checked={showDetailedStats} label="Show Detailed Stats" onChange={setShowDetailedStats} />
                             <Checkbox checked={followLive} label="Stats Follow Live" onChange={setFollowLive} />
@@ -318,6 +322,9 @@ export function LiveGamePageContent({ gameId, game, awayTeam, homeTeam }: LiveGa
                             {!isHomerunChallenge &&
                                 <Checkbox checked={showBoxScore} label="Show Box Score" onChange={setShowBoxScore} />
                             }
+                            {!isHomerunChallenge && showBoxScore &&
+                                <Checkbox checked={showExtendedBoxScore} label="Extended Box Score" onChange={setShowExtendedBoxScore} />
+                            }
                             <Checkbox checked={showStats} label="Show Stats" onChange={setShowStats} />
                             <Checkbox checked={showDetailedStats} label="Show Detailed Stats" onChange={setShowDetailedStats} />
                             <Checkbox checked={followLive} label="Follow Live" onChange={setFollowLive} />
@@ -326,14 +333,16 @@ export function LiveGamePageContent({ gameId, game, awayTeam, homeTeam }: LiveGa
                     </div>
 
                     {showBoxScore &&
-                        <div className='flex items-stretch my-2 gap-4'>
-                            <div className='flex-1'>
-                                <BoxScore gameStats={gameStats} team={awayTeam} isAway={true} />
+                    <div className="md:flex flex-col gap-2 mt-4 hidden md:visible items-center justify-center overflow-x-visible">
+                        <div className="flex flex-row items-stretch gap-4">
+                            <div className="flex-1">
+                                <BoxScore gameStats={gameStats} team={awayTeam} isAway={true} showExtended={showExtendedBoxScore} />
                             </div>
-                            <div className='flex-1'>
-                                <BoxScore gameStats={gameStats} team={homeTeam} isAway={false} />
+                            <div className="flex-1">
+                                <BoxScore gameStats={gameStats} team={homeTeam} isAway={false} showExtended={showExtendedBoxScore} />
                             </div>
                         </div>
+                    </div>
                     }
                     {(showStats && followLive && showDetailedStats) ? (<div className='grid grid-cols-2 gap-2 items-stretch h-full'>
                         <ExpandedPlayerStats player={lastEvent.pitcher && players ? { ...teamPlayers[lastPitcher] as any, ...players[lastPitcher] } : null} category='pitching' />
