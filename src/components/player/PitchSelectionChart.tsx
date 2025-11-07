@@ -3,6 +3,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend, ChartOptions, LegendItem
 import { Doughnut } from 'react-chartjs-2';
 import { useSettings } from "../Settings";
 import { LoadingMini } from "../Loading";
+import { Player } from "@/types/Player";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 ChartJS.defaults.font.family = 'GeistSans, "GeistSans Fallback"';
@@ -19,7 +20,8 @@ const pitchTypeColors: Record<string, string> = {
     'Changeup': '#55a144',
 };
 
-export function PitchSelectionChart({ id }: { id: string }) {
+// Actual pitch usage stats
+export function PitchUsageChart({ id }: { id: string }) {
     const { settings } = useSettings();
     const pitchSelection = usePlayerPitchSelection({
         playerId: id
@@ -32,6 +34,34 @@ export function PitchSelectionChart({ id }: { id: string }) {
         }],
         labels: pitchSelection.data?.map(p => p.pitch_type),
     };
+    const title = "Actual Pitch Usage";
+    return PitchChart({ data, settings, pitchSelection, title });
+}
+
+// Expected pitch selection stats from Player object
+export function PitchSelectionChart({ player }: { player: Player}) {
+
+    const { settings } = useSettings();
+
+    // Extract pitch names and percentages from player.pitch_selection
+    const pitchEntries = Object.entries(player.pitch_selection || {});
+    const pitchNames = pitchEntries.map(([name]) => name);
+    const pitchPercentages = pitchEntries.map(([, pct]) => pct);
+
+    const data = {
+        datasets: [{
+            data: pitchPercentages,
+            backgroundColor: pitchNames.map(p => pitchTypeColors[p] || '#cccccc')
+        }],
+        labels: pitchNames,
+    };
+
+    const hasData = pitchEntries.length > 0;
+    const title = "Expected Pitch Selection";
+    return PitchChart({ data, settings, pitchSelection: { isPending: false, data: hasData ? pitchEntries : null }, title });
+}
+
+export function PitchChart({ data, settings, pitchSelection, title = "Pitch Selection" }: { data: any, settings: any, pitchSelection: any, title?: string }) {
 
     const options: ChartOptions<'doughnut'> = {
         maintainAspectRatio: false,
@@ -39,7 +69,7 @@ export function PitchSelectionChart({ id }: { id: string }) {
             legend: {
                 position: 'right',
                 labels: {
-                    color: settings.theme?.text, 
+                    color: settings.theme?.text,
                     generateLabels: (chart: Chart): LegendItem[] => {
                         const { data } = chart;
                         const labels = data.labels || [];
@@ -92,9 +122,9 @@ export function PitchSelectionChart({ id }: { id: string }) {
 
     return (
         <div className='flex flex-col items-center gap-2 mt-6'>
-            <div className="text-lg font-bold">Pitch Selection</div>
+            <div className="text-lg font-bold">{title}</div>
             <div className='w-120 h-60'>
-                {!pitchSelection.isPending && pitchSelection.data && pitchSelection.data.length > 0
+                {pitchSelection && !pitchSelection.isPending && pitchSelection.data && pitchSelection.data.length > 0
                     ? <Doughnut data={data} options={options} />
                     : <LoadingMini />
                 }

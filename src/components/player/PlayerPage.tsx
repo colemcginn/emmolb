@@ -5,7 +5,7 @@ import { Player } from "@/types/Player";
 import { usePlayer } from "@/hooks/api/Player";
 import { useTeam } from "@/hooks/api/Team";
 import PlayerAttributes from "./PlayerAttributes";
-import { PitchSelectionChart } from "./PitchSelectionChart";
+import { PitchSelectionChart, PitchUsageChart } from "./PitchSelectionChart";
 import Link from "next/link";
 import { PlayerPageHeader } from "./PlayerPageHeader";
 import PlayerStatsTables from "./PlayerStatsTables";
@@ -29,9 +29,22 @@ export function PlayerPage({ id }: PlayerPageProps) {
         playerId: id
     });
 
-    const { data: team, isPending: teamIsPending } = useTeam({
+    const { data: teamData, isPending: teamIsPending } = useTeam({
         teamId: player?.team_id
     });
+
+    // add bench players too
+    const team = useMemo(() => {
+        if (!teamData) return undefined;
+        
+        const allPlayers = [
+            ...teamData.players,
+            ...(teamData.bench?.batters || []),
+            ...(teamData.bench?.pitchers || [])
+        ];
+        
+        return { ...teamData, players: allPlayers };
+    }, [teamData]);
 
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -128,9 +141,11 @@ export function PlayerPage({ id }: PlayerPageProps) {
                 {activeTab === 'charts' && (
                     <>
                         {player.position_type === 'Pitcher'
-                            ? <PitchSelectionChart id={id} />
+                            ? <PitchUsageChart id={id} />
                             : <div>Batter charts coming soon!</div>}
+                        <PitchSelectionChart player={player} />
                     </>
+
                 )}
                 {activeTab === 'attributes' && <PlayerAttributes player={{ ...player, slot: joinedPlayer.slot }} />}
                 {activeTab === 'feed' && <PlayerFeed playerId={id} />}

@@ -220,6 +220,7 @@ export type Player = {
     likes: string;
     modifications: Boon[];
     number: number;
+    pitch_selection: Record<string, number>;
     position: string;
     position_type: string;
     season_stats: Record<string, Record<string, string>>;
@@ -265,6 +266,31 @@ export function mapBoon(raw: any): Boon | undefined {
     }
 }
 
+const pitchAbbrToName: Record<string, string> = {
+    'FF': 'Fastball',
+    'SI': 'Sinker',
+    'FC': 'Cutter',
+    'SL': 'Slider',
+    'CU': 'Curveball',
+    'KC': 'Knuckle Curve',
+    'CH': 'Changeup',
+    'FS': 'Splitter',
+    'ST': 'Sweeper',
+}
+
+function mapPitchSelection(raw: any): Record<string, number> {
+    if (!raw || !raw.PitchSelection || !raw.PitchTypes) {
+        return {};
+    }
+
+    const result: Record<string, number> = {};
+    for (let i = 0; i < raw.PitchTypes.length; i++) {
+        result[pitchAbbrToName[raw.PitchTypes[i]]] = raw.PitchSelection[i];
+    }
+    
+    return result;
+}
+
 export function MapAPIPlayerResponse(data: any): Player {
     return {
         augments: data.Augments,
@@ -302,5 +328,6 @@ export function MapAPIPlayerResponse(data: any): Player {
         team_id: data.TeamID,
         throws: data.Throws,
         id: data._id,
+        pitch_selection: mapPitchSelection(data),
     };
 }
