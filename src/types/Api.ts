@@ -20,6 +20,105 @@ export async function fetchLeague(id: string): Promise<League> {
     };
 }
 
+function parsePlayerRecords(data: any): any {
+    if (!data || !data.records) return [];
+    
+    // Define all possible stat keys
+    const allStatKeys = [
+        'allowed_stolen_bases', 'allowed_stolen_bases_risp', 'assists', 'assists_risp',
+        'at_bats', 'at_bats_risp', 'caught_double_play', 'caught_double_play_risp',
+        'caught_stealing', 'caught_stealing_risp', 'double_plays', 'double_plays_risp',
+        'doubles', 'doubles_risp', 'errors', 'errors_risp', 'field_out', 'field_out_risp',
+        'fielders_choice', 'fielders_choice_risp', 'flyouts', 'flyouts_risp',
+        'force_outs', 'force_outs_risp', 'grounded_into_double_play', 'grounded_into_double_play_risp',
+        'groundouts', 'groundouts_risp', 'hit_by_pitch', 'hit_by_pitch_risp',
+        'home_runs', 'home_runs_risp', 'left_on_base', 'left_on_base_risp',
+        'lineouts', 'lineouts_risp', 'plate_appearances', 'plate_appearances_risp',
+        'popouts', 'popouts_risp', 'putouts', 'putouts_risp',
+        'reached_on_error', 'reached_on_error_risp', 'runners_caught_stealing', 'runners_caught_stealing_risp',
+        'runs', 'runs_batted_in', 'runs_batted_in_risp', 'runs_risp',
+        'sac_flies', 'singles', 'singles_risp', 'stolen_bases', 'stolen_bases_risp',
+        'struck_out', 'struck_out_risp', 'triples', 'triples_risp', 'walked', 'walked_risp',
+        'ejected', 'hits', 'total_bases'
+    ];
+    
+    // Group records by season number
+    const seasonGroups = new Map<number, any[]>();
+    
+    for (const record of data.records) {
+        const season = record.Season;
+        if (!seasonGroups.has(season)) {
+            seasonGroups.set(season, []);
+        }
+        seasonGroups.get(season)!.push(record);
+    }
+    
+    // Combine stats for each season
+    const combinedSeasons = Array.from(seasonGroups.entries()).map(([season, records]) => {
+        // Combine all stats from all records in this season
+        const combinedStats: any = {};
+        
+        for (const record of records) {
+            if (!record.Stats) continue;
+            
+            // Iterate through each team's stats
+            for (const [teamId, teamStats] of Object.entries(record.Stats)) {
+                if (!combinedStats[teamId]) {
+                    combinedStats[teamId] = {};
+                }
+                
+                // Add up all numeric stats
+                for (const [statKey, statValue] of Object.entries(teamStats as any)) {
+                    if (typeof statValue === 'number') {
+                        combinedStats[teamId][statKey] = (combinedStats[teamId][statKey] || 0) + statValue;
+                    }
+                }
+            }
+        }
+        
+        // Ensure all stat keys exist with default value of 0
+        for (const teamId in combinedStats) {
+            for (const statKey of allStatKeys) {
+                if (!(statKey in combinedStats[teamId])) {
+                    combinedStats[teamId][statKey] = 0;
+                }
+            }
+        }
+
+        // // Calculate derived stats
+        // for (const teamId in combinedStats) {
+        //     const stats = combinedStats[teamId];
+        //     // Calculate hits
+        //     stats['hits'] = (stats.singles || 0) + (stats.doubles || 0) + (stats.triples || 0) + (stats.home_runs || 0);
+        //     // Calculate total bases
+        //     stats['total_bases'] = (stats.singles || 0) + (2 * (stats.doubles || 0)) + (3 * (stats.triples || 0)) + (4 * (stats.home_runs || 0));
+        //     combinedStats[teamId] = stats;
+        // }
+
+        // Use the most recent record's player info (last in the array)
+        const latestRecord = records[records.length - 1];
+        
+        return {
+            Season: season,
+            SeasonID: records[0].SeasonID,
+            FirstName: latestRecord.FirstName,
+            LastName: latestRecord.LastName,
+            PlayerID: records[0].PlayerID,
+            Stats: combinedStats
+        };
+    });
+    
+    return combinedSeasons;
+}
+
+export async function fetchPlayerRecords(playerId: string) {
+    // 	https://mmolb.com/api/playerrecord/68ea9398d834c6992b5c5210
+    const res = await fetch(`https://mmolb.com/api/playerrecord/${playerId}`);
+    if (!res.ok) throw new Error('Failed to load player records');
+    const data = await res.json();
+    return parsePlayerRecords(data);
+}
+
 export async function fetchTeamGames(id: string, season: number): Promise<CashewsGame[]> {
     const apiUrl = new URL(`https://freecashe.ws/api/games`);
     if (season) apiUrl.searchParams.set('season', String(season));

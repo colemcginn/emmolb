@@ -6,6 +6,7 @@ import { BattingStats, BattingStatsTable } from "./BattingStats";
 import { PitchingStats, PitchingStatsTable } from "./PitchingStats";
 import { FieldingStats, FieldingStatsTable } from "./FieldingStats";
 import { LoadingMini } from "../Loading";
+import { fetchPlayerRecords } from "@/types/Api";
 
 export type Season = {
     season: number;
@@ -106,6 +107,8 @@ type PlayerStatsTablesProps = {
     playerId: string
 };
 
+
+
 export default function PlayerStatsTables({ playerId }: PlayerStatsTablesProps) {
     const { data: currentSeason } = useMmolbTime({
         select: time => time.seasonNumber
@@ -114,12 +117,38 @@ export default function PlayerStatsTables({ playerId }: PlayerStatsTablesProps) 
         playerId,
         select: player => ({ posType: player.position_type, currentSeasonStats: player.stats[player.team_id] }),
     });
+    // const { data: cashewsStats } = useQuery({
+    //     queryKey: ['player-cashews-stats', playerId],
+    //     queryFn: async () => {
+    //         const res = await fetch(`/nextapi/player/${playerId}/cashews-stats`);
+    //         if (!res.ok) throw new Error('Failed to load player stats');
+    //         return await res.json() as (Season & BattingStats & PitchingStats & FieldingStats)[];
+    //     },
+    //     staleTime: 60 * 60 * 1000,
+    // });
+
+    // get playerRecords and parse them
     const { data: cashewsStats } = useQuery({
         queryKey: ['player-cashews-stats', playerId],
         queryFn: async () => {
-            const res = await fetch(`/nextapi/player/${playerId}/cashews-stats`);
-            if (!res.ok) throw new Error('Failed to load player stats');
-            return await res.json() as (Season & BattingStats & PitchingStats & FieldingStats)[];
+            const data = await fetchPlayerRecords(playerId);
+            const parsedRecords = data as any[];
+            // Transform parsedRecords into desired format
+            const transformedStats = parsedRecords.map((record: any) => {
+                const seasonStats: any = { season: record.Season };
+
+                for (const teamStats of Object.values(record.Stats)) {
+                    for (const [statKey, statValue] of Object.entries(teamStats as any)) {
+                        if (typeof statValue === 'number') {
+                            seasonStats[statKey] = (seasonStats[statKey] || 0) + statValue;
+                        }
+                    }
+                }
+
+                return seasonStats;
+            });
+
+            return transformedStats as (Season & BattingStats & PitchingStats & FieldingStats)[];
         },
         staleTime: 60 * 60 * 1000,
     });

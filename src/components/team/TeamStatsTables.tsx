@@ -6,6 +6,8 @@ import { slotsList } from "./Constants";
 import Link from "next/link";
 import { usePersistedState } from "@/hooks/PersistedState";
 import { Checkbox } from "./Checkbox";
+import { useQueries } from "@tanstack/react-query";
+import { fetchPlayerRecords } from "@/types/Api";
 
 const SETTING_SHOW_BENCH = 'teamStatsTables_showBench';
 
@@ -361,7 +363,50 @@ export default function TeamStatsTables({ team }: TeamStatsTablesProps) {
         ...(team.bench?.pitchers || [])
     ];
 
-    const visiblePlayers = showBench ? allPlayers : allPlayers.filter(p => !isBenchPlayer(p.slot));
+    // Fetch player records for all players
+    const playerRecordsQueries = useQueries({
+        queries: allPlayers.map(player => ({
+            queryKey: ['player-records', player.player_id],
+            queryFn: () => fetchPlayerRecords(player.player_id),
+            staleTime: 60 * 60 * 1000,
+        }))
+    });
+    console.log(playerRecordsQueries);
+
+
+    // Map players with their fetched records data
+    const playersWithRecords = allPlayers.map((player, index) => {
+        const queryResult = playerRecordsQueries[index];
+        if (queryResult.isSuccess && queryResult.data && queryResult.data.length > 0) {
+            // Get stats for season 10
+            const season10Record = queryResult.data.find((record: any) => record.Season === 10);
+            if (season10Record && season10Record.Stats) {
+                const teamId = Object.keys(season10Record.Stats)[0];
+                const recordStats = season10Record.Stats[teamId];
+                
+                // Calculate hits and total bases
+                recordStats.hits = (recordStats.singles || 0) + (recordStats.doubles || 0) + (recordStats.triples || 0) + (recordStats.home_runs || 0);
+                recordStats.total_bases = (recordStats.singles || 0) + (2 * (recordStats.doubles || 0)) + (3 * (recordStats.triples || 0)) + (4 * (recordStats.home_runs || 0));
+                recordStats.obp = recordStats.plate_appearances > 0 ? ( (recordStats.hits || 0) + (recordStats.walked || 0) + (recordStats.hit_by_pitch || 0) ) / recordStats.plate_appearances : 0;
+                recordStats.slg = recordStats.at_bats > 0 ? ( recordStats.total_bases || 0 ) / recordStats.at_bats : 0;
+                recordStats.ip = recordStats.outs ? recordStats.outs / 3 : 0;
+                recordStats.era = recordStats.ip > 0 ? ( recordStats.earned_runs || 0 ) * 9 / recordStats.ip : 0;
+                recordStats.whip = recordStats.ip > 0 ? ( (recordStats.walks || 0) + (recordStats.hits_allowed || 0) ) / recordStats.ip : 0;
+                recordStats.h9 = recordStats.ip > 0 ? (recordStats.hits_allowed || 0) * 9 / recordStats.ip : 0;
+                recordStats.hr9 = recordStats.ip > 0 ? (recordStats.home_runs_allowed || 0) * 9 / recordStats.ip : 0;
+                recordStats.k9 = recordStats.ip > 0 ? (recordStats.strikeouts || 0) * 9 / recordStats.ip : 0;
+                recordStats.bb9 = recordStats.ip > 0 ? (recordStats.walks || 0) * 9 / recordStats.ip : 0;
+
+                return {
+                    ...player,
+                    stats: recordStats || player.stats
+                };
+            }
+        }
+        return player;
+    });
+
+    const visiblePlayers = showBench ? playersWithRecords : playersWithRecords.filter(p => !isBenchPlayer(p.slot));
 
     const batterStats = useMemo(() =>
         visiblePlayers
